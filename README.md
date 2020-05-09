@@ -7,3 +7,7 @@ install with packages:
 if any changes:
 
 `conda list --export > requirements.txt`
+
+## datasets
+
+datasets are sitting in dropbox shared folder [here](https://www.dropbox.com/home/20936)

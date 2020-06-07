@@ -1,63 +1,47 @@
 import pandas as pd
 import ast
-from sklearn.cluster import KMeans
-from sklearn import preprocessing
-import dateutil
-import matplotlib.pyplot as plt
-from sklearn.preprocessing import LabelEncoder
-
-
-def get_values_from_genre_json(row, genre):
-    movies_many_genres = ast.literal_eval(row['genres'])
-    movies_genres = []
-    for item in movies_many_genres:
-        movies_genres.append(item['name'])
-    if genre in movies_genres:
-        return 1
-    else:
-        return 0
-
-
-def check(row):
-    if not type(row) == str:
-        return row
-    else:
-        return None
 
 
 def main():
-    df = pd.read_csv('https://www.dropbox.com/s/j9vxjw3g1s7wqsg/movies_metadata.csv?dl=1')
-    df = df[['id', 'imdb_id', 'title', 'budget', 'revenue', 'genres', 'runtime', 'release_date', 'vote_average',
-             'vote_count', 'popularity']]
+    movies_raw_df = pd.read_csv('movies.csv')
+    ratings_raw_df = pd.read_csv('ratings.csv')
+
+    # First we set a new df to be a proper and cleaner set, we keep only the genres, ids and titles of the movie.
+
+    generes_df = movies_raw_df.loc[:, ('genres', 'title', 'id')]
+    generes_df.drop_duplicates(['id'], inplace=True)
+    generes_df.dropna()
+
+    """
+    Preparing our genres column for usage
+    Genres are stored as JSONs in our dataset, lets convert to it to hot-one format
+    """
     genres_list = set()
-    for index, value in df['genres'].iteritems():
-        movies_genres = ast.literal_eval(value)
-        for item in movies_genres:
-            genres_list.add(item['name'])
-    genres_list = list(genres_list)
+    for index, row in generes_df.iterrows():  # Todo its a bad practice to use iterrows
+        # extract genres
+        movies_genres = ast.literal_eval(row['genres'])
+        for genre in movies_genres:
+            # if genre is not a column, generate the column and set all to 0
+            if genre['name'] not in generes_df:
+                genres_list.add(genre['name'])
+                generes_df[genre['name']] = 0
+            generes_df.at[index, genre['name']] = 1
+    generes_df.drop(columns=['genres'], inplace=True)
+    generes_df.set_index('id', inplace=True)
 
-    for genre in genres_list:
-        df[genre] = df.apply(lambda x: get_values_from_genre_json(x, genre), axis=1)
+    # Now for every user we will its genres ratings
 
-    df = df.drop(columns=['genres', 'id', 'imdb_id', 'title', 'popularity'])
-    df = df.dropna(subset=['release_date'])
-    df = df[df['popularity'] != 'Beware Of Frost Bites']
-    df['release_date'] = df['release_date'].apply(dateutil.parser.parse)
-
-    columns = ['release_date']
-
-    # Set concoder
-    encoder = LabelEncoder()
-
-    # Encode data frame
-    encoded_df = df.copy()
-    for col in columns:
-        encoded_df[col] = encoder.fit_transform(df[col])
-
-    y_pred = KMeans(n_clusters=2, random_state=0).fit(encoded_df)
-    plt.subplot(221)
-    plt.scatter(df, df, c=y_pred)
-    plt.title("Incorrect Number of Blobs")
+    genres = list(generes_df.drop(columns=['title']).columns)
+    genre_ratings = pd.DataFrame()
+    for genre in genres:
+        genre_movies = generes_df[generes_df[genre] == 1]
+        avg_genre_votes_per_user = ratings_raw_df[ratings_raw_df['movieId'].isin(
+            genre_movies.index)].loc[:, ['userId', 'rating']].groupby(
+            ['userId'])['rating'].mean().round(2)
+        genre_ratings = pd.concat([genre_ratings, avg_genre_votes_per_user], axis=1)
+    genre_ratings.columns = genres
+    print(genre_ratings.head())
+    print(genre_ratings.shape)
 
 
 if __name__ == '__main__':

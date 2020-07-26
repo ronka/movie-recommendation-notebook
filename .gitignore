@@ -1,6 +1,7 @@
 *.zip
 *.csv
 *.docx
+.DS_Store
 
 .ipynb_checkpoints/
 .idea/
